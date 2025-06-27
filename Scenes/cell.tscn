@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://cscpanie1jmoy"]
+
+[ext_resource type="Script" path="res://Scripts/cell.gd" id="1_vjns4"]
+
+[node name="Cell" type="Node3D"]
+script = ExtResource("1_vjns4")
+
+[node name="CellHolder" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.116202, 0)
+size = Vector3(1, 0.2, 1)

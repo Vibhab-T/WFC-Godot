@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3 uid="uid://g542r724ic00"]
+
+[ext_resource type="Script" path="res://Scripts/tile.gd" id="1_oqeys"]
+[ext_resource type="Texture2D" uid="uid://dxjer360f2pvq" path="res://Textures/Straight Road.png" id="2_af7qn"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_t21cv"]
+albedo_texture = ExtResource("2_af7qn")
+
+[node name="RoadStraight" type="Node3D"]
+script = ExtResource("1_oqeys")
+east = 1
+west = 1
+tile_name = "RoadStraight"
+
+[node name="RoadStraight" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+material_override = SubResource("StandardMaterial3D_t21cv")
+size = Vector3(1, 0.2, 1)

@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3 uid="uid://p67lu1m6nalk"]
+
+[ext_resource type="Script" path="res://Scripts/tile.gd" id="1_c505g"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_qi6rv"]
+albedo_color = Color(0, 0.481029, 4.81307e-07, 1)
+
+[node name="Building" type="Node3D"]
+script = ExtResource("1_c505g")
+tile_name = "Building"
+
+[node name="Platform" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+size = Vector3(1, 0.2, 1)
+material = SubResource("StandardMaterial3D_qi6rv")
+
+[node name="Structure" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.54345, 0)
+size = Vector3(0.75, 5, 0.75)
