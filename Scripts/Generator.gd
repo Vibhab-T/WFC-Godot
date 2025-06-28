@@ -41,11 +41,18 @@ const TILE_SCENES = [
 ]
 
 @export var dimension: int = 20
+var cells: Array[Array] = []
 
 func _ready() -> void:
 	GenerateGrid()
 
 func GenerateGrid():
+	#2D array for easier cell access
+	cells.resize(dimension)
+	for x in range(dimension):
+		cells[x] = []
+		cells[x].resize(dimension)
+	
 	for y in range(dimension):
 		for x in range(dimension):
 			var cell_instance = CELL.instantiate()
@@ -54,27 +61,44 @@ func GenerateGrid():
 			cell_instance.grid_x = x
 			cell_instance.grid_y = y
 			
-			cell_instance.options = TILE_SCENES.duplicate()
+			cell_instance.options = TILE_SCENES.duplicate(true)
 			
 			add_child(cell_instance)
+			cells[x][y] = cell_instance
 	StartWaveFunctionCollapse()
 
 func StartWaveFunctionCollapse():
-	var cell = GetCellAt(0,0)
+	var start_x = dimension/2
+	var start_y = dimension/2
 	
-	CollapseCell(cell)
-	PropagateConstraints(cell)
+	var cell = GetCellAt(start_x, start_y)
 	
-	while true:
+	if cell:
+		CollapseCell(cell)
+		PropagateConstraints(cell)
+	
+	var iterations = 0
+	var max_iters = dimension * dimension * 2 
+	while iterations < max_iters:
 		var next_cell = FindLowestEntropyCell()
 		if not next_cell:
+			print("WFC Completed")
 			break
+		if next_cell.options.is_empty():
+			print("ERROR: Cell with no options found at ", next_cell.grid_x, ",", next_cell.grid_y)
 		CollapseCell(next_cell)
 		PropagateConstraints(next_cell)
+		iterations += 1
+	if iterations >= max_iters:
+		print("Max iterations reached, might be incomplete")
 
 
 
 func CollapseCell(cell: Cell):
+	if cell.options.is_empty():
+		print("ERROR: Trying to collapse cell with no options!")
+		return
+	
 	var chosen = cell.options.pick_random()
 	cell.options = [chosen]
 	cell.collapsed = true
@@ -93,9 +117,8 @@ func CollapseCell(cell: Cell):
 		cell_holder.queue_free()
 	
 func GetCellAt(x: int, y: int):
-	for c in get_children():
-		if c is Cell and c.grid_x == x and c.grid_y == y:
-			return c
+	if x>= 0 and x < dimension and y >= 0 and y < dimension:
+		return cells[x][y]
 	return null
 
 func FindLowestEntropyCell():
@@ -113,114 +136,69 @@ func FindLowestEntropyCell():
 		return null
 	return candidates.pick_random()
 
+func CollapsedPropagation(cell: Cell, dx: int, dy: int, my_dir: String, neighbour_dir: String, my_edge: int, queue: Array[Cell]):
+	var neighbour = GetCellAt(cell.grid_x + dx, cell.grid_y + dy)
+	if not neighbour or neighbour.collapsed:
+		return
+	
+	var old_size = neighbour.options.size()
+	neighbour.options = FilterTiles(neighbour_dir, my_edge, neighbour.options)
+	
+	if neighbour.options.size() < old_size and not queue.has(neighbour):
+		queue.append(neighbour)
+
+func UncollapsedPropagation(cell: Cell, dx: int, dy: int, my_dir: String, neighbour_dir: String, queue: Array[Cell]):
+	var neighbour = GetCellAt(cell.grid_x + dx, cell.grid_y + dy)
+	if not neighbour or neighbour.collapsed:
+		return
+	
+	var old_size = neighbour.options.size()
+	
+	# get all possible edge values this cell could have on the connecting side
+	var possible_edge_values = []
+	for option in cell.options:
+		var edge_val = option["edges"][my_dir]
+		if not possible_edge_values.has(edge_val):
+			possible_edge_values.append(edge_val)
+	
+	# filter neighbour's optiopn to only those compatible with our possible edges
+	var new_options = []
+	for neighbour_option in neighbour.options:
+		var neighbour_edge = neighbour_option["edges"][neighbour_dir]
+		if possible_edge_values.has(neighbour_edge):
+			new_options.append(neighbour_option)
+	
+	neighbour.options = new_options
+	if neighbour.options.size() < old_size and not queue.has(neighbour):
+		queue.append(neighbour)
+	
+
 func PropagateConstraints(start_cell: Cell):
-	var queue: Array = [start_cell]
+	var queue: Array[Cell] = [start_cell]
+	var processed: Dictionary = {}
 	
 	while not queue.is_empty():
 		var cell = queue.pop_front()
 		
-		#if cell is not collapsed, standard propagation
+		var cell_key = str(cell.grid_x) + "," + str(cell.grid_y)
+		if processed.has(cell_key):
+			continue
+		processed[cell_key] = true
+		
 		if cell.collapsed:
 			var collapsed_tile = cell.options[0]
-			var north = collapsed_tile["edges"]["north"]
-			var east = collapsed_tile["edges"]["east"]
-			var south = collapsed_tile["edges"]["south"]
-			var west = collapsed_tile["edges"]["west"]
-			
-			#reduce north neighbour
-			var north_neighbour = GetCellAt(cell.grid_x, cell.grid_y+1)
-			if north_neighbour and not north_neighbour.collapsed:
-				var old_size = north_neighbour.options.size()
-				if north == 1:
-					north_neighbour.options = FilterTiles("south", 1, north_neighbour.options)
-				else:
-					north_neighbour.options = FilterTiles("south", 0, north_neighbour.options)
-				if north_neighbour.options.size() < old_size:
-					queue.append(north_neighbour)
-			
-			#reduce east neighour
-			var east_neighbour = GetCellAt(cell.grid_x+1, cell.grid_y)
-			if east_neighbour and not east_neighbour.collapsed:
-				var old_size = east_neighbour.options.size()
-				if east == 1:
-					east_neighbour.options = FilterTiles("west", 1, east_neighbour.options)
-				else:
-					east_neighbour.options = FilterTiles("west", 0, east_neighbour.options)
-				if east_neighbour.options.size() < old_size:
-					queue.append(east_neighbour)
-			
-			#reduce south neighbour
-			var south_neighbour = GetCellAt(cell.grid_x, cell.grid_y-1)
-			if south_neighbour and not south_neighbour.collapsed:
-				var old_size = south_neighbour.options.size()
-				if south == 1:
-					south_neighbour.options = FilterTiles("north", 1, south_neighbour.options)
-				else:
-					south_neighbour.options = FilterTiles("north", 0, south_neighbour.options)
-				if south_neighbour.options.size() < old_size:
-					queue.append(south_neighbour)
-			
-			#reduce west neighbour
-			var west_neighbour = GetCellAt(cell.grid_x-1, cell.grid_y)
-			if west_neighbour and not west_neighbour.collapsed:
-				var old_size = west_neighbour.options.size()
-				if west == 1:
-					west_neighbour.options = FilterTiles("east", 1, west_neighbour.options)
-				else:
-					west_neighbour.options = FilterTiles("east", 0, west_neighbour.options)
-				if west_neighbour.options.size() < old_size:
-					queue.append(west_neighbour)
+			CollapsedPropagation(cell, 0, 1, "north", "south", collapsed_tile["edges"]["north"], queue) #NORTH
+			CollapsedPropagation(cell, 1, 0, "east", "west", collapsed_tile["edges"]["east"], queue) #EAST
+			CollapsedPropagation(cell, 0, -1, "south", "north", collapsed_tile["edges"]["south"], queue) #SOUTH
+			CollapsedPropagation(cell, -1, 0, "west", "east", collapsed_tile["edges"]["west"], queue) #WEST
 		else:
-			var edge_union = {"north": [], "east": [], "south": [], "west": []}
-			for opt in cell.options:
-				for dir in edge_union:
-					if not edge_union[dir].has(opt["edges"][dir]):
-						edge_union[dir].append(opt["edges"][dir])
-			
-			#reuce NORTH neighbour
-			var north_neighbour = GetCellAt(cell.grid_x, cell.grid_y +1)
-			if north_neighbour and not north_neighbour.collapsed:
-				var old_size = north_neighbour.options.size()
-				var combined = []
-				for val in edge_union["north"]:
-					combined += FilterTiles("south", val, north_neighbour.options)
-				north_neighbour.options = combined
-				if north_neighbour.options.size() < old_size:
-					queue.append(north_neighbour)
-			
-			#reduce EAST neighbour
-			var east_neighbour = GetCellAt(cell.grid_x+1, cell.grid_y)
-			if east_neighbour and not east_neighbour.collapsed:
-				var old_size = east_neighbour.options.size()
-				var combined = []
-				for val in edge_union["east"]:
-					combined += FilterTiles("west", val, east_neighbour.options)
-				east_neighbour.options = combined
-				if east_neighbour.options.size() < old_size:
-					queue.append(east_neighbour)
-			
-			#reduce SOUTH neighbour
-			var south_neighbour = GetCellAt(cell.grid_x, cell.grid_y - 1)
-			if south_neighbour and not south_neighbour.collapsed:
-				var old_size = south_neighbour.options.size()
-				var combined = []
-				for val in edge_union["south"]:
-					combined += FilterTiles("north", val, south_neighbour.options)
-				south_neighbour.options = combined
-				if south_neighbour.options.size() < old_size:
-					queue.append(south_neighbour)
-			
-			#reduce WEST neighbour
-			var west_neighbour = GetCellAt(cell.grid_x-1, cell.grid_y)
-			if west_neighbour and not west_neighbour.collapsed:
-				var old_size = west_neighbour.options.size()
-				var combined = []
-				for val in edge_union["west"]:
-					combined += FilterTiles("east", val, west_neighbour.options)
-				west_neighbour.options = combined
-				if west_neighbour.options.size() < old_size:
-					queue.append(west_neighbour)
-
+			#not collapsed
+			UncollapsedPropagation(cell, 0, 1, "north", "south", queue) #NORTH
+			UncollapsedPropagation(cell, 1, 0, "east", "west", queue) #EAST
+			UncollapsedPropagation(cell, 0, -1, "south", "north", queue) #SOUTH
+			UncollapsedPropagation(cell, -1, 0, "west", "east", queue) #WEST
+		
+		
 
 
 func FilterTiles(direction: String, value: int, options := TILE_SCENES):
